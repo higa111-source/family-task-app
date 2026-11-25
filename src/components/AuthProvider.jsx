@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../supabaseClient'
 import { AuthContext } from '../hooks/contexts'
 import { hasStoredSession } from '../lib/auth'
+import { clearPhotoCache } from '../lib/photos'
 
 function AuthProvider({ children }) {
   // 起動を待たせないよう、通信せず端末の保存情報だけで判定する
@@ -11,6 +12,7 @@ function AuthProvider({ children }) {
   useEffect(() => {
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       setLoggedIn(hasStoredSession())
+      if (_event === 'SIGNED_OUT') clearPhotoCache()
       setUserId(session?.user?.id ?? null)
     })
     return () => data.subscription.unsubscribe()

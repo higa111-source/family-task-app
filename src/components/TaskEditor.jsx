@@ -1,10 +1,14 @@
-import { useState } from 'react'
-import { Plus, Trash2, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Camera, Plus, Trash2, X } from 'lucide-react'
 import { supabase } from '../supabaseClient'
 import { useData } from '../hooks/contexts'
 import useSubmitLock from '../hooks/useSubmitLock'
 import { assigneeOf, assigneeOptions } from '../lib/tasks'
+import { MAX_PHOTOS, compressPhoto, deletePhotos, uploadPhoto } from '../lib/photos'
+import { Photo, PhotoViewer } from './Photo'
 import { INPUT_CLASS, PRIMARY_CLASS } from '../lib/ui'
+
+const PHOTO_DELETE = 'absolute -top-1 -right-1 rounded-full bg-gray-800 p-1.5 text-white'
 
 const toDraft = (t) => ({ id: t.id, title: t.title, assignee: assigneeOf(t), due_date: t.due_date, sort_order: t.sort_order })
 const newSub = (sort_order) => ({ id: crypto.randomUUID(), title: '', assignee: 'both', due_date: null, sort_order })
@@ -19,14 +23,14 @@ function DateInput({ value, onChange, label }) {
 }
 
 function TaskEditor({ task, subs, defaultCategory, onClose }) {
-  const { members, categories, write, updateItem, setMessage } = useData()
+  const { members, categories, photos, write, reload, updateItem, setMessage } = useData()
   const { busy, run } = useSubmitLock()
   const people = assigneeOptions(members)
   // 開いた時点の内容。新規でも id を先に決め、再送しても二重登録にならないようにする
   const [initial] = useState(() => ({
     form: task
-      ? { id: task.id, title: task.title, category_id: task.category_id, assignee: assigneeOf(task), due_date: task.due_date, note: task.note ?? '' }
-      : { id: crypto.randomUUID(), title: '', category_id: defaultCategory, assignee: 'both', due_date: null, note: '' },
+      ? { id: task.id, title: task.title, category_id: task.category_id, assignee: assigneeOf(task), due_date: task.due_date, note: task.note ?? '', keep_photos: task.keep_photos }
+      : { id: crypto.randomUUID(), title: '', category_id: defaultCategory, assignee: 'both', due_date: null, note: '', keep_photos: false },
     subs: subs.map(toDraft),
   }))
   const [form, setForm] = useState(initial.form)
@@ -34,9 +38,82 @@ function TaskEditor({ task, subs, defaultCategory, onClose }) {
   const set = (patch) => setForm((f) => ({ ...f, ...patch }))
   const setDraft = (id, patch) => setDrafts((ds) => ds.map((d) => (d.id === id ? { ...d, ...patch } : d)))
 
+  // 追加した写真は、保存するまで端末内に置く
+  const [pending, setPending] = useState([])
+  const [compressing, setCompressing] = useState(false)
+  const [viewing, setViewing] = useState(null)
+  const attemptedRef = useRef(new Map()) // 送信を始めたが、登録が終わっていない写真
+  const previewsRef = useRef([])
+  const savedPhotos = photos.filter((p) => p.item_id === form.id)
+  const room = MAX_PHOTOS - savedPhotos.length - pending.length
+
+  useEffect(() => () => previewsRef.current.forEach((url) => URL.revokeObjectURL(url)), [])
+
+  const addPhotos = async (e) => {
+    const files = [...e.target.files]
+    e.target.value = '' // 同じ写真を選び直せるようにする
+    if (files.length > room) setMessage(`写真は1タスク${MAX_PHOTOS}枚までです`)
+    setCompressing(true)
+    for (const file of files.slice(0, room)) {
+      try {
+        const photo = await compressPhoto(file)
+        previewsRef.current.push(photo.previewUrl)
+        setPending((ps) => [...ps, photo])
+      } catch (error) {
+        console.error('写真の変換失敗', error)
+        setMessage('読み込めない写真がありました')
+      }
+    }
+    setCompressing(false)
+  }
+
+  const removePending = (photo) => {
+    setPending((ps) => ps.filter((p) => p.id !== photo.id))
+    const attempted = attemptedRef.current.get(photo.id)
+    if (attempted) {
+      attemptedRef.current.delete(photo.id)
+      deletePhotos([attempted]).then(reload)
+    }
+  }
+
+  const removeSaved = (photo) => {
+    if (!window.confirm('この写真を削除しますか？元に戻せません。')) return
+    run(async () => {
+      if (!(await deletePhotos([photo]))) setMessage('写真を削除できませんでした')
+      await reload()
+    })
+  }
+
+  const uploadPending = async () => {
+    let failed = 0
+    for (const photo of pending) {
+      const row = { id: photo.id, item_id: form.id }
+      attemptedRef.current.set(photo.id, row)
+      try {
+        await uploadPhoto(form.id, photo)
+        attemptedRef.current.delete(photo.id)
+        setPending((ps) => ps.filter((p) => p.id !== photo.id))
+      } catch (error) {
+        console.error('写真の保存失敗', error)
+        failed++
+      }
+    }
+    await reload()
+    if (failed > 0) setMessage(`写真${failed}枚を保存できませんでした。もう一度「保存」を押してください`)
+    return failed === 0
+  }
+
+  // 送信が途中で止まった写真の後始末。記録だけ登録済みの場合もあるため両方消す
+  const cleanUpPhotos = () => {
+    const rows = [...attemptedRef.current.values()]
+    if (rows.length > 0) deletePhotos(rows).then(reload)
+  }
+
   const close = () => {
-    const dirty = JSON.stringify({ form, subs: drafts }) !== JSON.stringify(initial)
-    if (!busy && (!dirty || window.confirm('変更を保存せずに閉じますか？'))) onClose()
+    const dirty = pending.length > 0 || JSON.stringify({ form, subs: drafts }) !== JSON.stringify(initial)
+    if (busy || compressing || (dirty && !window.confirm('変更を保存せずに閉じますか？'))) return
+    cleanUpPhotos()
+    onClose()
   }
 
   const save = (e) => {
@@ -59,11 +136,12 @@ function TaskEditor({ task, subs, defaultCategory, onClose }) {
       const changed = kept.filter((d) => JSON.stringify(d) !== JSON.stringify(initial.subs.find((s) => s.id === d.id)))
       const rows = [
         { ...form, title, note: form.note.trim() || null, parent_id: null, sort_order: task?.sort_order ?? 0 },
-        ...changed.map((d) => ({ ...d, title: d.title.trim(), category_id: null, note: null, parent_id: form.id })),
+        ...changed.map((d) => ({ ...d, title: d.title.trim(), category_id: null, note: null, keep_photos: false, parent_id: form.id })),
       ]
       const ok = await write(supabase.from('task_items').upsert(rows).select('id'))
-      if (ok) onClose()
-      return ok
+      if (!ok || !(await uploadPending())) return false
+      onClose()
+      return true
     })
   }
 
@@ -71,7 +149,10 @@ function TaskEditor({ task, subs, defaultCategory, onClose }) {
     if (!window.confirm('このタスクを削除しますか？（設定のゴミ箱から戻せます）')) return
     run(async () => {
       const ok = await updateItem(task.id, { deleted_at: new Date().toISOString() })
-      if (ok) onClose()
+      if (ok) {
+        cleanUpPhotos()
+        onClose()
+      }
       return ok
     })
   }
@@ -113,6 +194,37 @@ function TaskEditor({ task, subs, defaultCategory, onClose }) {
             <textarea rows={4} maxLength={5000} value={form.note} onChange={(e) => set({ note: e.target.value })} className={INPUT_CLASS} />
           </label>
           <fieldset className="flex flex-col gap-2">
+            <legend className="mb-1 text-sm text-gray-600">写真（{savedPhotos.length + pending.length}/{MAX_PHOTOS}）</legend>
+            <div className="grid grid-cols-4 gap-2">
+              {savedPhotos.map((p, i) => (
+                <span key={p.id} className="relative">
+                  <button type="button" aria-label={`写真${i + 1}を見る`} onClick={() => setViewing(i)} className="block w-full">
+                    <Photo photo={p} small className="aspect-square w-full rounded-lg object-cover" />
+                  </button>
+                  <button type="button" aria-label={`写真${i + 1}を削除`} disabled={busy} onClick={() => removeSaved(p)} className={PHOTO_DELETE}><X size={16} /></button>
+                </span>
+              ))}
+              {pending.map((p, i) => (
+                <span key={p.id} className="relative">
+                  <img src={p.previewUrl} alt="追加する写真" className="aspect-square w-full rounded-lg object-cover" />
+                  <button type="button" aria-label={`追加する写真${i + 1}を取り消す`} disabled={busy} onClick={() => removePending(p)} className={PHOTO_DELETE}><X size={16} /></button>
+                </span>
+              ))}
+              {room > 0 && (
+                <label className="flex aspect-square flex-col items-center justify-center rounded-lg border border-dashed border-gray-400 text-xs text-gray-600">
+                  <Camera size={22} />{compressing ? '準備中' : '追加'}
+                  <input type="file" accept="image/*" multiple aria-label="写真を追加" disabled={busy || compressing} onChange={addPhotos} className="sr-only" />
+                </label>
+              )}
+            </div>
+            {savedPhotos.length + pending.length > 0 && (
+              <label className="flex items-center gap-2 py-1 text-sm text-gray-700">
+                <input type="checkbox" checked={form.keep_photos} onChange={(e) => set({ keep_photos: e.target.checked })} className="size-5 accent-emerald-700" />
+                📌 写真を残す（完了から90日後の自動削除をしない）
+              </label>
+            )}
+          </fieldset>
+          <fieldset className="flex flex-col gap-2">
             <legend className="mb-1 text-sm text-gray-600">サブタスク</legend>
             {drafts.map((d) => (
               <div key={d.id} className="flex flex-col gap-2 rounded-xl bg-white p-2">
@@ -137,9 +249,10 @@ function TaskEditor({ task, subs, defaultCategory, onClose }) {
           </fieldset>
         </div>
         <footer className="flex flex-col bg-white p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
-          <button type="submit" disabled={busy} className={PRIMARY_CLASS}>{busy ? '保存中...' : '保存'}</button>
+          <button type="submit" disabled={busy || compressing} className={PRIMARY_CLASS}>{busy ? '保存中...' : '保存'}</button>
         </footer>
       </form>
+      {viewing !== null && <PhotoViewer photos={savedPhotos} index={viewing} onMove={setViewing} onClose={() => setViewing(null)} />}
     </div>
   )
 }

@@ -16,7 +16,7 @@ function Chip({ active, onClick, color, children }) {
 }
 
 function TaskListPage() {
-  const { members, categories, items } = useData()
+  const { members, categories, items, photos } = useData()
   const [assignee, setAssignee] = useState('all')
   const [category, setCategory] = useState('all')
   const [showDone, setShowDone] = useState(false)
@@ -38,7 +38,7 @@ function TaskListPage() {
   const groups = groupByDue(visible.filter((t) => !t.completed_at))
   const done = visible.filter((t) => t.completed_at).sort((a, b) => b.completed_at.localeCompare(a.completed_at))
   const card = (t) => (
-    <TaskCard key={t.id} task={t} subs={subsOf(t.id)} people={people}
+    <TaskCard key={t.id} task={t} subs={subsOf(t.id)} people={people} photos={photos.filter((p) => p.item_id === t.id)}
       category={categories.find((c) => c.id === t.category_id)} onEdit={() => setEditor({ task: t })} />
   )
 

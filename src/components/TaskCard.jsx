@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Check } from 'lucide-react'
 import { useData } from '../hooks/contexts'
+import { Photo, PhotoViewer } from './Photo'
 import { assigneeOf, formatDue, toDateValue } from '../lib/tasks'
 
 function CheckButton({ task }) {
@@ -23,8 +24,9 @@ function Due({ task }) {
   return <span className={`shrink-0 text-xs ${overdue ? 'font-bold text-red-600' : 'text-gray-500'}`}>📅 {formatDue(task.due_date)}</span>
 }
 
-function TaskCard({ task, subs, people, category, onEdit }) {
+function TaskCard({ task, subs, photos, people, category, onEdit }) {
   const [open, setOpen] = useState(false)
+  const [viewing, setViewing] = useState(null)
   const person = (t) => people.find((p) => p.key === assigneeOf(t))
   const titleClass = (t) => `break-words ${t.completed_at ? 'text-gray-400 line-through' : 'text-gray-800'}`
   const who = (t, size) => <span role="img" aria-label={`担当: ${person(t).label}`} className={size}>{person(t).emoji}</span>
@@ -45,6 +47,16 @@ function TaskCard({ task, subs, people, category, onEdit }) {
           {who(task, 'text-3xl')}
         </button>
       </div>
+      {photos.length > 0 && (
+        <div className="mt-2 ml-9 flex gap-2 overflow-x-auto">
+          {photos.map((p, i) => (
+            <button key={p.id} type="button" aria-label={`写真${i + 1}を見る`} onClick={() => setViewing(i)} className="shrink-0">
+              <Photo photo={p} small className="size-12 rounded-lg object-cover" />
+            </button>
+          ))}
+        </div>
+      )}
+      {viewing !== null && <PhotoViewer photos={photos} index={Math.min(viewing, photos.length - 1)} onMove={setViewing} onClose={() => setViewing(null)} />}
       {subs.length > 0 && (
         <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="ml-9 pt-2 pr-4 text-xs font-bold text-emerald-800">
           {open ? '▾' : '▸'} サブタスク {subs.filter((s) => s.completed_at).length}/{subs.length}
