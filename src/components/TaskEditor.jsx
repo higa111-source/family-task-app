@@ -3,11 +3,11 @@ import { Plus, Trash2, X } from 'lucide-react'
 import { supabase } from '../supabaseClient'
 import { useData } from '../hooks/contexts'
 import useSubmitLock from '../hooks/useSubmitLock'
-import { assigneeOptions } from '../lib/tasks'
+import { assigneeOf, assigneeOptions } from '../lib/tasks'
 import { INPUT_CLASS, PRIMARY_CLASS } from '../lib/ui'
 
-const toDraft = (t) => ({ id: t.id, title: t.title, assignee: t.assignee, due_date: t.due_date, sort_order: t.sort_order })
-const newSub = (sort_order) => ({ id: crypto.randomUUID(), title: '', assignee: null, due_date: null, sort_order })
+const toDraft = (t) => ({ id: t.id, title: t.title, assignee: assigneeOf(t), due_date: t.due_date, sort_order: t.sort_order })
+const newSub = (sort_order) => ({ id: crypto.randomUUID(), title: '', assignee: 'both', due_date: null, sort_order })
 
 function DateInput({ value, onChange, label }) {
   return (
@@ -25,8 +25,8 @@ function TaskEditor({ task, subs, defaultCategory, onClose }) {
   // 開いた時点の内容。新規でも id を先に決め、再送しても二重登録にならないようにする
   const [initial] = useState(() => ({
     form: task
-      ? { id: task.id, title: task.title, category_id: task.category_id, assignee: task.assignee, due_date: task.due_date, note: task.note ?? '' }
-      : { id: crypto.randomUUID(), title: '', category_id: defaultCategory, assignee: null, due_date: null, note: '' },
+      ? { id: task.id, title: task.title, category_id: task.category_id, assignee: assigneeOf(task), due_date: task.due_date, note: task.note ?? '' }
+      : { id: crypto.randomUUID(), title: '', category_id: defaultCategory, assignee: 'both', due_date: null, note: '' },
     subs: subs.map(toDraft),
   }))
   const [form, setForm] = useState(initial.form)
@@ -46,7 +46,7 @@ function TaskEditor({ task, subs, defaultCategory, onClose }) {
       if (!title) { setMessage('題名を入力してください'); return false }
       const isSaved = (d) => initial.subs.some((s) => s.id === d.id)
       // 何も入力していない新しい行は無視する
-      const kept = drafts.filter((d) => isSaved(d) || d.title.trim() || d.assignee || d.due_date)
+      const kept = drafts.filter((d) => isSaved(d) || d.title.trim() || d.assignee !== 'both' || d.due_date)
       if (kept.some((d) => !d.title.trim())) { setMessage('サブタスクの題名を入力してください'); return false }
 
       const removed = initial.subs.filter((s) => !drafts.some((d) => d.id === s.id)).map((s) => s.id)
@@ -91,9 +91,9 @@ function TaskEditor({ task, subs, defaultCategory, onClose }) {
           </label>
           <fieldset>
             <legend className="mb-1 text-sm text-gray-600">担当者</legend>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               {people.map((p) => (
-                <button key={p.key ?? 'none'} type="button" aria-pressed={form.assignee === p.key} onClick={() => set({ assignee: p.key })}
+                <button key={p.key} type="button" aria-pressed={form.assignee === p.key} onClick={() => set({ assignee: p.key })}
                   className={`flex min-w-0 flex-col items-center rounded-xl border-2 bg-white py-2 text-xs ${form.assignee === p.key ? 'border-emerald-700 font-bold text-emerald-800' : 'border-transparent text-gray-600'}`}>
                   <span className="text-3xl">{p.emoji}</span><span className="max-w-full truncate px-1">{p.label}</span>
                 </button>
@@ -122,9 +122,9 @@ function TaskEditor({ task, subs, defaultCategory, onClose }) {
                   <button type="button" aria-label="サブタスクを削除" onClick={() => setDrafts((ds) => ds.filter((x) => x.id !== d.id))} className="p-2 text-gray-500"><Trash2 size={18} /></button>
                 </div>
                 <div className="flex gap-2">
-                  <select aria-label="サブタスクの担当者" value={d.assignee ?? ''} onChange={(e) => setDraft(d.id, { assignee: e.target.value || null })}
+                  <select aria-label="サブタスクの担当者" value={d.assignee} onChange={(e) => setDraft(d.id, { assignee: e.target.value })}
                     className="w-28 shrink-0 rounded-lg border border-gray-300 bg-white px-1 text-gray-800">
-                    {people.map((p) => <option key={p.key ?? 'none'} value={p.key ?? ''}>{p.emoji} {p.label}</option>)}
+                    {people.map((p) => <option key={p.key} value={p.key}>{p.emoji} {p.label}</option>)}
                   </select>
                   <DateInput label="サブタスクの期限" value={d.due_date} onChange={(due_date) => setDraft(d.id, { due_date })} />
                 </div>

@@ -3,7 +3,8 @@ import { ChevronDown, ChevronUp, Pencil, Plus, Trash2 } from 'lucide-react'
 import { supabase } from '../supabaseClient'
 import { useData } from '../hooks/contexts'
 import useSubmitLock from '../hooks/useSubmitLock'
-import { COLORS, INPUT_CLASS, PRIMARY_CLASS } from '../lib/ui'
+import EmojiPicker from './EmojiPicker'
+import { CATEGORY_EMOJIS, COLORS, INPUT_CLASS, PRIMARY_CLASS } from '../lib/ui'
 
 const ICON_BUTTON = 'p-2 text-gray-600 disabled:opacity-25'
 
@@ -54,16 +55,14 @@ function CategoryPage() {
       ))}
       {!form && (
         <button type="button" className="flex items-center justify-center gap-1 rounded-xl border border-dashed border-gray-400 py-3 text-gray-600"
-          onClick={() => setForm({ id: crypto.randomUUID(), name: '', emoji: '', color: COLORS[categories.length % COLORS.length], sort_order: Math.max(-1, ...categories.map((c) => c.sort_order)) + 1 })}>
+          onClick={() => setForm({ id: crypto.randomUUID(), name: '', emoji: '📁', color: COLORS[categories.length % COLORS.length], sort_order: Math.max(-1, ...categories.map((c) => c.sort_order)) + 1 })}>
           <Plus size={18} />カテゴリを追加
         </button>
       )}
       {form && (
         <form onSubmit={save} className="flex flex-col gap-3 rounded-xl bg-white p-4">
-          <div className="flex gap-2">
-            <input aria-label="絵文字" placeholder="🧹" maxLength={16} value={form.emoji} onChange={(e) => set({ emoji: e.target.value })} className="w-16 shrink-0 rounded-lg border border-gray-300 text-center" />
-            <input aria-label="カテゴリ名" placeholder="例: 家事系" maxLength={50} value={form.name} onChange={(e) => set({ name: e.target.value })} className={INPUT_CLASS} />
-          </div>
+          <input aria-label="カテゴリ名" placeholder="例: 家事系" maxLength={50} value={form.name} onChange={(e) => set({ name: e.target.value })} className={INPUT_CLASS} />
+          <EmojiPicker value={form.emoji} onChange={(emoji) => set({ emoji })} choices={CATEGORY_EMOJIS} />
           <div className="flex justify-between">
             {COLORS.map((color, i) => (
               <button key={color} type="button" aria-label={`色${i + 1}`} aria-pressed={form.color === color} onClick={() => set({ color })}

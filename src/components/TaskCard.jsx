@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Check } from 'lucide-react'
 import { useData } from '../hooks/contexts'
-import { formatDue, toDateValue } from '../lib/tasks'
+import { assigneeOf, formatDue, toDateValue } from '../lib/tasks'
 
 function CheckButton({ task }) {
   const { updateItem } = useData()
@@ -25,7 +25,7 @@ function Due({ task }) {
 
 function TaskCard({ task, subs, people, category, onEdit }) {
   const [open, setOpen] = useState(false)
-  const person = (t) => people.find((p) => p.key === t.assignee) ?? people[3]
+  const person = (t) => people.find((p) => p.key === assigneeOf(t))
   const titleClass = (t) => `break-words ${t.completed_at ? 'text-gray-400 line-through' : 'text-gray-800'}`
   const who = (t, size) => <span role="img" aria-label={`担当: ${person(t).label}`} className={size}>{person(t).emoji}</span>
 
@@ -57,7 +57,7 @@ function TaskCard({ task, subs, people, category, onEdit }) {
               <CheckButton task={s} />
               <span className={`min-w-0 flex-1 text-sm ${titleClass(s)}`}>{s.title}</span>
               <Due task={s} />
-              {s.assignee && who(s, 'text-xl')}
+              {who(s, 'text-xl')}
             </li>
           ))}
         </ul>

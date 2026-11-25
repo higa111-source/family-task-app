@@ -34,11 +34,13 @@ export function groupByDue(tasks, now = new Date()) {
   return groups.filter((g) => g.tasks.length > 0)
 }
 
-// 「二人で」は夫・妻どちらの絞り込みにも含める
+// 担当者のデフォルトは全員。以前に未割当で登録されたもの（null）も全員として扱う
+export const assigneeOf = (task) => task.assignee ?? 'both'
+
+// 「全員」は夫・妻どちらの絞り込みにも含める
 export function matchesAssignee(task, filter) {
   if (filter === 'all') return true
-  if (filter === 'none') return !task.assignee
-  return task.assignee === filter || task.assignee === 'both'
+  return assigneeOf(task) === filter || assigneeOf(task) === 'both'
 }
 
 export function assigneeOptions(members) {
@@ -49,7 +51,6 @@ export function assigneeOptions(members) {
   return [
     of('husband', '夫', '👨'),
     of('wife', '妻', '👩'),
-    { key: 'both', label: '二人で', emoji: '👫' },
-    { key: null, label: '未割当', emoji: '👤' },
+    { key: 'both', label: '全員', emoji: '👫' },
   ]
 }

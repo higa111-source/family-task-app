@@ -33,7 +33,7 @@ function TaskListPage() {
     if (t.parent_id) return false
     if (activeCategory !== 'all' && (t.category_id ?? 'none') !== activeCategory) return false
     return matchesAssignee(t, assignee)
-      || subsOf(t.id).some((s) => s.assignee && !s.completed_at && matchesAssignee(s, assignee))
+      || subsOf(t.id).some((s) => !s.completed_at && s.assignee === assignee)
   })
   const groups = groupByDue(visible.filter((t) => !t.completed_at))
   const done = visible.filter((t) => t.completed_at).sort((a, b) => b.completed_at.localeCompare(a.completed_at))
@@ -48,7 +48,7 @@ function TaskListPage() {
         <div className="flex gap-2 overflow-x-auto px-3">
           <Chip active={assignee === 'all'} onClick={() => setAssignee('all')}>全員</Chip>
           {people.filter((p) => p.key !== 'both').map((p) => (
-            <Chip key={p.key ?? 'none'} active={assignee === (p.key ?? 'none')} onClick={() => setAssignee(p.key ?? 'none')}>{p.emoji} {p.label}</Chip>
+            <Chip key={p.key} active={assignee === p.key} onClick={() => setAssignee(p.key)}>{p.emoji} {p.label}</Chip>
           ))}
         </div>
         <div className="flex gap-2 overflow-x-auto px-3">

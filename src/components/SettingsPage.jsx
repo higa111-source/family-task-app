@@ -2,28 +2,33 @@ import { useState } from 'react'
 import { supabase } from '../supabaseClient'
 import { useAuth, useData } from '../hooks/contexts'
 import useSubmitLock from '../hooks/useSubmitLock'
-import { INPUT_CLASS } from '../lib/ui'
+import EmojiPicker from './EmojiPicker'
+import { INPUT_CLASS, PERSON_EMOJIS } from '../lib/ui'
 
 function MemberRow({ member, isMe }) {
   const { write, setMessage } = useData()
   const { busy, run } = useSubmitLock()
   const [name, setName] = useState(member.name)
   const [emoji, setEmoji] = useState(member.emoji)
+  const [picking, setPicking] = useState(false)
   const save = (e) => {
     e.preventDefault()
     run(async () => {
       const ok = await write(supabase.from('task_members')
         .update({ name: name.trim() || member.name, emoji: emoji.trim() || member.emoji }).eq('user_id', member.user_id).select('user_id'))
-      if (ok) setMessage('保存しました')
+      if (ok) { setMessage('保存しました'); setPicking(false) }
       return ok
     })
   }
   return (
-    <form onSubmit={save} className="flex items-center gap-2">
-      <input aria-label="絵文字" maxLength={16} value={emoji} onChange={(e) => setEmoji(e.target.value)} className="w-14 shrink-0 rounded-lg border border-gray-300 bg-white py-2.5 text-center" />
+    <form onSubmit={save} className="flex flex-col gap-2">
+      <div className="flex items-center gap-2">
+      <button type="button" aria-label={`${member.name}の絵文字を変更`} aria-expanded={picking} onClick={() => setPicking(!picking)} className="w-14 shrink-0 rounded-lg border border-gray-300 bg-white py-1.5 text-2xl">{emoji}</button>
       <input aria-label="名前" maxLength={20} value={name} onChange={(e) => setName(e.target.value)} className={INPUT_CLASS} />
       <span className="w-8 shrink-0 text-xs text-gray-500">{isMe && '自分'}</span>
       <button type="submit" disabled={busy} className="shrink-0 rounded-lg bg-emerald-700 px-3 py-2.5 text-sm font-bold text-white disabled:opacity-50">保存</button>
+      </div>
+      {picking && <EmojiPicker value={emoji} onChange={setEmoji} choices={PERSON_EMOJIS} />}
     </form>
   )
 }
