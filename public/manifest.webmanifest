@@ -1,0 +1,11 @@
+{
+  "id": "/family-task-app/",
+  "name": "家族タスク",
+  "short_name": "家族タスク",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f3f6f4",
+  "theme_color": "#f3f6f4",
+  "icons": [{ "src": "apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }]
+}

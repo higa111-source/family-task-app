@@ -1,0 +1,32 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, "Segoe UI", Roboto, "Hiragino Kaku Gothic ProN", sans-serif;
+  background: #f3f6f4;
+}
+
+#root {
+  max-width: 480px;
+  margin: 0 auto;
+  height: 100svh;
+  display: flex;
+  flex-direction: column;
+  background: #f3f6f4;
+  overflow: hidden;
+}
+
+/* iPhone は文字が16px未満の入力欄を選ぶと画面をズームし、戻さない。
+   レイヤー外に書き、text-sm などの指定より優先させる */
+input, select, textarea {
+  font-size: 16px;
+}
